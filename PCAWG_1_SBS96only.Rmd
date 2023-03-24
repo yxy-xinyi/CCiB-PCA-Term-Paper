@@ -1,0 +1,593 @@
+---
+title: "PCAWG_all_spectra"
+author: "Xinyi"
+date: "2023-03-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# prepare packages 
+```{r}
+# dataset 
+library(PCAWG7) 
+# PCA plotting tool  
+library(factoextra) 
+
+library(tibble)
+library(tidyr)
+
+# heatmap 
+library(gplots)
+
+library(ggfortify)
+# for dataframe manipulation
+library(dplyr)
+# for tsne computation
+library(Rtsne)
+# for umap computation
+library(umap)
+
+
+# General plotting tool
+library(ggplot2)
+#
+library(plotly) 
+# for 3D pca plot
+library(rgl)
+
+
+# for tsne computation
+library(Rtsne)
+# for umap computation
+library(umap)
+
+#library(rsvd)
+```
+
+
+```{r}
+all_exposure<- as.data.frame(t(PCAWG7::exposure$PCAWG$SBS96))
+
+aa <- PCAWG7::exposure.stats$PCAWG$SBS96
+bb <- lapply(aa, rownames)
+
+enframe(bb) %>%
+    unnest(value)
+
+data.frame(lapply(bb, "length<-", max(lengths(bb))))
+```
+
+
+# Considering all the mutations types: #SBS96, SBS192, SBS1536, Indel, DBS
+```{r}
+all_spectra <- as.data.frame(t(PCAWG7::spectra$PCAWG$SBS96
+                                     #PCAWG7::spectra$TCGA$SBS96)))
+                                     ))
+                                     #PCAWG7::spectra$PCAWG$SBS192,
+                                     #PCAWG7::spectra$PCAWG$SBS1536,
+                                     #PCAWG7::spectra$PCAWG$ID,
+                                     #PCAWG7::spectra$PCAWG$DBS78)))
+all_spectra <- rownames_to_column(all_spectra,"cancer_type")
+# extract cancer type from sample name
+for (i in 1:length(all_spectra$cancer_type)){
+  tmp <- strsplit(all_spectra$cancer_type[i],"::")[[1]][1]
+  all_spectra$cancer_type[i] <- tmp
+}
+dim(all_spectra)
+```
+```{r}
+all_spectra_subtypes <- all_spectra
+```
+
+```{r}
+# number of cancer types in the study
+count(unique(all_spectra['cancer_type']))
+```
+
+```{r}
+# combine subtypes to bigger type groups
+for (i in 1:length(all_spectra$cancer_type)){
+  tmp <- strsplit(all_spectra$cancer_type[i],"-")[[1]][1]
+  all_spectra$cancer_type[i] <- tmp
+}
+```
+
+```{r}
+# number of cancer subtypes in the study
+count(unique(all_spectra['cancer_type']))
+```
+
+# plot variation in LSC
+```{r}
+PlotSpectraAsSigsWithUncertainty <- function(xx,mean_xx, title = "Mean.as.signature") {
+  arrow.tops <- apply(xx, 2, max)
+  arrow.bottoms <- apply(xx, 2, min)
+  
+  options(digits = 2)
+  
+  bp <- ICAMS::PlotCatalog(
+    catalog = mean_xx,
+    upper   = TRUE,
+    xlabels = TRUE,
+    cex     = 0.8,
+    ylim    = c(min(arrow.bottoms), max(arrow.tops) + 0.005)
+  )
+  add.arrows(bp$plot.object, arrow.tops, arrow.bottoms)
+  #xx$arrow.tops    <- arrow.tops
+  #xx$arrow.bottoms <- arrow.bottoms
+  return(invisible(xx))
+}
+```
+
+```{r}
+add.arrows <- function(bp, tops, bottoms) {
+  oldopt <- getOption("warn")
+  on.exit(options(warn = oldopt))
+  options(warn = -1) # Does not seem to turn off warnings
+  which0 <- which((tops - bottoms) == 0)
+  tops[which0] <- tops[which0] + 1e-5 
+  suppressWarnings(
+    # Necessary because generates warnings for 0-length arrows
+    arrows(
+      x0     = bp,
+      y0     = tops,    # location of up arrow tips
+      y1     = bottoms, # location of down arrow tips
+      angle  = 90,      # use "T" arrow heads
+      code   = 3,       # use arrow heads at both ends
+      length = 0.025    # width of arrow heads
+    ))
+}
+```
+
+```{r, fig.width=10, fig.height=3}
+this_spectra <- all_spectra[(all_spectra$cancer_type =="Liver"),-1]
+avg.sig <- as.matrix(colMeans(this_spectra[,]))
+colnames(avg.sig) <- "Liver"
+par(oma = c(1.5,3,1.5,1.5))
+#ICAMS::PlotCatalog(avg.sig)
+PlotSpectraAsSigsWithUncertainty(this_spectra,avg.sig, title = "Mean.as.signature") 
+```
+
+```{r, fig.width=10, fig.height=3}
+this_spectra <- all_spectra[(all_spectra$cancer_type =="Lung"),-1]
+avg.sig <- as.matrix(colMeans(this_spectra[,]))
+colnames(avg.sig) <- "Lung"
+par(oma = c(1.5,3,1.5,1.5))
+#ICAMS::PlotCatalog(avg.sig)
+PlotSpectraAsSigsWithUncertainty(this_spectra,avg.sig, title = "Mean.as.signature") 
+```
+
+
+```{r, fig.width=10,fig.height=3}
+this_spectra <- all_spectra[(all_spectra$cancer_type =="Skin"),-1]
+avg.sig <- as.matrix(colMeans(this_spectra[,]))
+colnames(avg.sig) <- "Skin"
+par(oma = c(1.5,3,1.5,1.5))
+#ICAMS::PlotCatalog(avg.sig)
+PlotSpectraAsSigsWithUncertainty(this_spectra,avg.sig, title = "Mean.as.signature") 
+```
+
+```{r, fig.width=10, fig.height=3}
+this_spectra <- all_spectra[(all_spectra$cancer_type =="ColoRect"),-1]
+avg.sig <- as.matrix(colMeans(this_spectra[,]))
+colnames(avg.sig) <- "ColoRect"
+par(oma = c(1.5,3,1.5,1.5))
+#ICAMS::PlotCatalog(avg.sig)
+PlotSpectraAsSigsWithUncertainty(this_spectra,avg.sig, title = "Mean.as.signature") 
+```
+
+
+# Plot Avg count signature 
+```{r, fig.height=4, fig.width=15}
+this_spectra <- all_spectra[(all_spectra$cancer_type =="Lung"),-1]
+avg.sig <- as.matrix(colMeans(this_spectra[,]))
+colnames(avg.sig) <- "Lung"
+par(oma = c(1.5,3,1.5,1.5))
+ICAMS::PlotCatalog(avg.sig)
+```
+
+```{r, fig.height=4, fig.width=15}
+this_spectra <- all_spectra[(all_spectra$cancer_type =="Skin"),]
+avg.sig <- as.matrix(colMeans(this_spectra[,-1]))
+colnames(avg.sig) <- "Skin"
+par(oma = c(1.5,3,1.5,1.5))
+ICAMS::PlotCatalog(avg.sig)
+```
+
+```{r, fig.height=4, fig.width=15}
+this_spectra <- all_spectra[(all_spectra$cancer_type =="ColoRect"),]
+avg.sig <- as.matrix(colMeans(this_spectra[,-1]))
+colnames(avg.sig) <- "ColoRect"
+par(oma = c(1.5,3,1.5,1.5))
+ICAMS::PlotCatalog(avg.sig)
+```
+
+
+```{r}
+pca_res <- prcomp(all_spectra[,-1], center = TRUE, scale. = TRUE)
+autoplot(pca_res,data = all_spectra[,], colour = 'cancer_type') 
+```
+```{r}
+fviz_pca_ind(pca_res,
+             #addEllipses=TRUE, ellipse.level=0.95,
+             habillage=all_spectra[, "cancer_type"])
+```
+
+```{r}
+sc_all_spectra <- NULL
+for (i in 0:5)
+  sc_all_spectra <- cbind(sc_all_spectra,as.matrix(rowMeans(all_spectra[,(2+i*16):(17+i*16)])))
+sc_all_spectra <- as.data.frame(sc_all_spectra)
+sc_all_spectra <- cbind(all_spectra[,1], sc_all_spectra)
+colnames(sc_all_spectra) <-  c("cancer_type","C>A","C>G","C>T","T>A","T>C","T>G")
+sc_all_spectra <- as.data.frame(sc_all_spectra, stringsAsFactors = FALSE)
+sc_all_spectra_split <- split(sc_all_spectra,sc_all_spectra$cancer_type)
+sc_all_spectra_split <- lapply(sc_all_spectra_split, function(x){x[,-1, drop=F]})
+colmean_split <- lapply(sc_all_spectra_split, colMeans)
+sum_table <- do.call(cbind,colmean_split)
+```
+
+```{r}
+View(as.data.frame(sort(colSums(sum_table))))
+```
+
+```{r}
+#write_csv(as.data.frame(sum_table), "sum_table.csv")
+```
+
+```{r}
+gplots::heatmap.2(#x = t(sum_table[,-c(7, 12,18, 22)]),
+                  x=sum_table,
+                  scale = "column",
+                  #scale ="row",
+                  dendrogram = "none",
+                  col = "heat.colors",
+                  key = T,
+                  keysize = 2,
+                  margins = c(5, 5),
+                  cex.axis = 1,
+                  symm = FALSE,
+                  trace = "none")
+```
+
+```{r}
+pca_res <- prcomp(all_spectra[-c(668,699, 2735),-1], center = TRUE, scale. = TRUE)
+autoplot(pca_res,data = all_spectra[-c(668,699, 2735),], colour = 'cancer_type') 
+```
+
+```{r}
+my_data <- all_spectra[-c(668,699, 2735),]
+#write.csv(my_data, file = "my_data.csv")
+```
+
+```{r}
+# plotting with cancer type and sample ID annotated
+fviz_pca_ind(pca_res,
+             #addEllipses=TRUE, ellipse.level=0.95,
+             habillage=all_spectra[-c(668,699,2735), "cancer_type"])
+```
+
+# PLotting PC scatter plot in 3D (first 3 PCs)
+## PLot 3d method 1
+```{r}
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+```
+
+```{r}
+components <- pca_res[["x"]]
+components <- data.frame(components)
+components$PC2 <- -components$PC2
+components$PC3 <- -components$PC3
+components = cbind(components, all_spectra[-c(668,699, 2735),1])
+
+tot_explained_variance_ratio <- summary(pca_res)[["importance"]]['Proportion of Variance',]
+tot_explained_variance_ratio <- 100 * sum(tot_explained_variance_ratio)
+
+
+fig <- plot_ly(components, x = ~PC1, y = ~PC2, z = ~PC3, color = ~all_spectra[-c(668,699, 2735),1], colors = gg_color_hue(22)) %>%
+  add_markers(size = 12)
+
+
+fig <- fig %>%
+  layout(
+    title = "3D plot after PCA"
+    #scene = list(bgcolor = "#e5ecf6")
+)
+
+fig
+```
+
+## plot 3d PCA plot method 2 (Abandoned because the visualization is not very nice)
+```{r}
+scores = as.data.frame(pca_res$x)
+```
+```{r}
+plot3d(scores[,1:3], 
+       size=8,
+       #col = seq(nrow(scores))
+       col = as.numeric(factor(all_spectra$cancer_type)))
+ 
+# text3d(scores[,1:3],
+#        texts=c(rownames(scores)), 
+#        cex= 0.7, pos=3)
+```
+
+# Importance of each dimension (Variance explained by each PC)
+```{r}
+fviz_eig(pca_res, addlabels = TRUE)
+```
+# Some general exploration
+## plot point quality
+```{r}
+fviz_pca_ind(pca_res,
+             axes = c(1,2),
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = FALSE     # Avoid text overlapping
+             )
+```
+
+## plot point/sample contribution 
+```{r}
+fviz_pca_ind(pca_res,
+             axes = c(1,2),
+             col.ind = "contrib", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = FALSE     # Avoid text overlapping
+             )
+```
+
+```{r}
+# plotting the samples with top 100 contribution
+fviz_pca_ind(pca_res, select.ind = list(contrib = 100))
+```
+
+## plot ellipse for the cancer types
+```{r}
+fviz_pca_ind(pca_res,
+             addEllipses=TRUE, ellipse.level=0.95,
+             habillage=all_spectra[-c(668,699,2735), "cancer_type"],
+             geom = "point")
+```
+
+# The Contribution of variables to PCs
+## Exploring the variable contributions 
+```{r}
+fviz_pca_var(pca_res, select.var = list(contrib = 10), repel = TRUE)
+```
+
+```{r}
+# plot the top one contributing variable
+fviz_pca_biplot(pca_res, label="var",
+               select.var = list(contrib = 1),
+               habillage=all_spectra[-c(668,699,2735), "cancer_type"],
+               repel = TRUE)
+```
+
+## Contribution to PC1
+```{r}
+fviz_contrib(pca_res, choice = "var", axes = 1, top = 96) 
+# + theme(axis.text = element_text(size = 4.5))
+# top 1000 drop to 0.05% contribution 
+```
+
+```{r}
+test <- fviz_contrib(pca_res, choice = "var", axes = 1)
+ts.names <- rownames(test$data)
+ts <- test$data[,"contrib"]
+table(ts>100/96)
+```
+```{r}
+sorted_index <- order(-ts)
+
+bp <- barplot(ts, 
+              #border = NA,
+              width = 2,
+        col = c(rep("blue",16), 
+                rep("yellow",16),
+                rep("red",16), 
+                rep("grey",16),
+                rep("green",16), 
+                rep("pink",16)),
+        las = 2,
+        names.arg = names(ts),
+        space=0,
+        cex.axis = 1,
+        # Adjust when necessary
+        ylim= c(0,2.5),
+        ylab = "Variable Contribution to PC1")
+top_n <- 10
+# Adjust when necessary
+text(bp[sorted_index[1:top_n]], ts[sorted_index[1:top_n]]+0.15, labels=ts.names[sorted_index[1:top_n]], srt=90, adj = c(0.5,1),xpd = TRUE, pos=3, cex =0.8)
+# abline(h = 0.15, col = "#69b3a2", lty=3)
+
+#mtext(names(pca_res$rotation[,2])[1:6], side = 1, line =2, srt=90, cex=1)
+legend("top", legend = c("C>A","C>G","C>T","T>A","T>C","T>G"), col = c("blue","yellow","red","grey","green","pink"), 
+       bty = "n", pch=20 , pt.cex = 2, cex = 0.8, horiz = T, inset = c(0.05, 0.0005))
+
+```
+
+## Contribution to PC2
+```{r}
+fviz_contrib(pca_res, choice = "var", axes = 2, top = 10)
+```
+
+```{r}
+test <- fviz_contrib(pca_res, choice = "var", axes = 2)
+ts.names <- rownames(test$data)
+ts <- test$data[,"contrib"]
+table(ts>100/96)
+```
+```{r}
+
+sorted_index <- order(-ts)
+bp <- barplot(ts, 
+              #border = NA,
+              width = 2,
+        col = c(rep("blue",16), 
+                rep("yellow",16),
+                rep("red",16), 
+                rep("grey",16),
+                rep("green",16), 
+                rep("pink",16)),
+        las = 2,
+        names.arg = names(ts),
+        space=0,
+        cex.axis = 1,
+        # Adjust when necessary
+        ylim= c(0,4),
+        ylab = "Variable Contribution to PC1")
+top_n <- 10
+# Adjust when necessary
+text(bp[sorted_index[1:top_n]], ts[sorted_index[1:top_n]]+0.15, labels=ts.names[sorted_index[1:top_n]], srt=90, adj = c(0.5,1),xpd = TRUE, pos=3, cex =0.8)
+# abline(h = 0.15, col = "#69b3a2", lty=3)
+
+#mtext(names(pca_res$rotation[,2])[1:6], side = 1, line =2, srt=90, cex=1)
+legend("top", legend = c("C>A","C>G","C>T","T>A","T>C","T>G"), col = c("blue","yellow","red","grey","green","pink"), 
+       bty = "n", pch=20 , pt.cex = 2, cex = 0.8, horiz = T, inset = c(0.05, 0.0005))
+
+```
+
+# Loadings of the PCs
+## Loadings for PC1
+```{r,fig.width=8}
+pc_load <- pca_res$rotation[,1]
+sorted_index <- order(-abs(pca_res$rotation[,1]))
+bp <- barplot(pca_res$rotation[,1], col = c(rep("blue",16), 
+                                      rep("yellow",16),
+                                      rep("red",16), 
+                                      rep("grey",16),
+                                      rep("green",16), 
+                                      rep("pink",16)),
+        las = 2,
+        names.arg = names(pca_res$rotation[,1]),
+        cex.axis = 1,
+        ylim = c(-0.15, 0.03),
+        space = 0,
+        # width = 8,
+        ylab = "PC1 Loadings")
+legend("top", legend = c("C>A","C>G","C>T","T>A","T>C","T>G"), col = c("blue","yellow","red","grey","green","pink"), 
+   bty = "n", pch=20 , pt.cex = 2, cex = 0.8, horiz = TRUE, inset = c(0.05, 0.05))
+top_n <- 5
+text(bp[sorted_index[1:top_n]], pc_load[sorted_index[1:top_n]]-0.015, labels=names(pc_load[sorted_index[1:top_n]]), srt=90, 
+      #adj = c(0.5,1),
+    xpd = T, pos=3, cex =0.8)
+#abline(h = -0.12, col = "#69b3a2", lty=3)
+#text(bp[32], y = -1.2, labels = "y = -1.2", col= "#69b3a2")
+
+# legend("top", legend = c("C>A","C>G","C>T","T>A","T>C","T>G"), col = c("blue","yellow","red","grey","green","pink"), horiz = TRUE, x.intersp = 1.5, y.intersp = 1.5, inset = c(0, -0.1), y = 1.1)
+```
+
+## Loadings for PC2
+```{r, fig.width=8}
+pc_load <- pca_res$rotation[,2]
+sorted_index <- order(-abs(pca_res$rotation[,2]))
+
+bp <- barplot(pc_load, 
+              #border = NA,
+              width = 2,
+        col = c(rep("blue",16), 
+                rep("yellow",16),
+                rep("red",16), 
+                rep("grey",16),
+                rep("green",16), 
+                rep("pink",16)),
+        las = 2,
+        names.arg = names(pca_res$rotation[,2]),
+        space=0,
+        cex.axis = 1,
+        ylim= c(-0.2,0.2),
+        ylab = "PC2 Loadings")
+top_n <- 5
+text(bp[sorted_index[1:top_n]], 
+     #pc_load[sorted_index[1:top_n]]+0.015, 
+     ifelse(pc_load[sorted_index[1:top_n]]>0,pc_load[sorted_index[1:top_n]]+0.015,pc_load[sorted_index[1:top_n]]-0.025),
+     labels=names(pc_load[sorted_index[1:top_n]]), srt=90, adj = c(0.5,1),xpd = TRUE, pos=3, cex =0.8)
+ abline(h = 0.15, col = "#69b3a2", lty=3)
+ abline(h = -0.15, col = "#69b3a2", lty = 3)
+#mtext(names(pca_res$rotation[,2])[1:6], side = 1, line =2, srt=90, cex=1)
+legend("topright", legend = c("C>A","C>G","C>T","T>A","T>C","T>G"), col = c("blue","yellow","red","grey","green","pink"), 
+       bty = "n", pch=20 , pt.cex = 2, cex = 0.8, horiz = FALSE, inset = c(0.05, 0.12), yjust = 1.2)
+
+```
+## Loadings for PC3
+```{r, fig.width=8}
+pc_load <- pca_res$rotation[,3]
+sorted_index <- order(-abs(pca_res$rotation[,3]))
+
+bp <- barplot(pc_load, 
+              #border = NA,
+              width = 2,
+        col = c(rep("blue",16), 
+                rep("yellow",16),
+                rep("red",16), 
+                rep("grey",16),
+                rep("green",16), 
+                rep("pink",16)),
+        las = 2,
+        names.arg = names(pca_res$rotation[,2]),
+        space=0,
+        cex.axis = 1,
+        ylim= c(-0.2,0.35),
+        ylab = "PC3 Loadings")
+top_n <- 5
+text(bp[sorted_index[1:top_n]], 
+     #pc_load[sorted_index[1:top_n]]+0.015, 
+     ifelse(pc_load[sorted_index[1:top_n]]>0,pc_load[sorted_index[1:top_n]]+0.015,pc_load[sorted_index[1:top_n]]-0.025),
+     labels=names(pc_load[sorted_index[1:top_n]]), srt=90, adj = c(0.5,1),xpd = TRUE, pos=3, cex =0.8)
+ #abline(h = 0.15, col = "#69b3a2", lty=3)
+ #abline(h = -0.15, col = "#69b3a2", lty = 3)
+#mtext(names(pca_res$rotation[,2])[1:6], side = 1, line =2, srt=90, cex=1)
+legend("topright", legend = c("C>A","C>G","C>T","T>A","T>C","T>G"), col = c("blue","yellow","red","grey","green","pink"), 
+       bty = "n", pch=20 , pt.cex = 2, cex = 0.8, horiz = FALSE, inset = c(0.05, 0.12), yjust = 1.2)
+
+```
+# Comparison with tsne
+```{r}
+tsne_res <- Rtsne(all_spectra[-c(668,699),-1])
+
+# Conversion of matrix to dataframe
+tsne_plot <- data.frame(x = tsne_res$Y[,1],
+                        y = tsne_res$Y[,2], colour = all_spectra[-c(668,699),"cancer_type"])
+ 
+# Plotting the plot using ggplot() function
+#ggplot2::ggplot(tsne_plot,label=Species)+ geom_point(aes(x=x,y=y))
+ggplot(tsne_plot, aes(x, y, colour = colour)) +
+  geom_point()
+```
+
+# Comparison with Umap
+```{r}
+umap_res = umap(all_spectra[-c(668,699),-1], n_components = 2, k = 10) 
+layout <- umap_res[["layout"]] 
+layout <- data.frame(layout) 
+final <- cbind(layout, all_spectra[-c(668,699),1]) 
+colnames(final) <- c('X1', 'X2', 'cancer_type') 
+
+# fig <- plot_ly(final, x = ~X1, y = ~X2, split = ~cancer_type,  type = 'scatter', mode = 'markers')%>%  
+#   layout(  
+#     plot_bgcolor = "#e5ecf6",
+#     legend=list(title=list(text='cancer_type')), 
+#     xaxis = list( 
+#       title = "0"),  
+#     yaxis = list( 
+#       title = "1")) 
+# fig
+
+final %>%
+  ggplot(aes(x = X1, 
+             y = X2, 
+             color = cancer_type))+
+  geom_point()+
+  labs(x = "UMAP1",
+       y = "UMAP2",
+      subtitle = "UMAP plot")
+```
+
+
